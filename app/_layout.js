@@ -1,27 +1,29 @@
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text } from 'react-native';
 import React, { useEffect } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import '../global.css';
 import { AuthContextProvider, useAuth } from '../context/authContext';
 
 const Mainlayout = () => {
-  const { isAuthenticated } = useAuth();
-  const segment = useSegments();
+  const { isAuthenticated, user } = useAuth();
+  const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (typeof isAuthenticated === 'undefined') return; // Wait until authentication state is known
+    if (typeof isAuthenticated === 'undefined') return; // Wait for auth state
 
-    const inApp = segment?.[0] === 'app'; // Check if user is in the app section
+    const inAuthRoutes = segments?.[0] === 'signIn' || segments?.[0] === 'signUp';
 
-    if (isAuthenticated && !inApp) {
-      router.replace('home'); // Redirect to 'home' if authenticated
-    } else if (isAuthenticated === false) {
-      router.replace('signIn'); // Redirect to 'signIn' if not authenticated
+    if (isAuthenticated && !inAuthRoutes) {
+      // User is authenticated, redirect to the home page
+      router.replace('/home');
+    } else if (!isAuthenticated && !inAuthRoutes) {
+      // User is not authenticated, redirect to signIn
+      router.replace('/signIn');
     }
-  }, [isAuthenticated, segment]);
+  }, [isAuthenticated, segments]);
 
-  // Show a loading indicator if authentication state is undefined
+  // Show a loading indicator if auth state is still undefined
   if (isAuthenticated === undefined) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-100">
