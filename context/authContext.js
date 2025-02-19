@@ -7,7 +7,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../firebaseConfig"; // Ensure `db` is imported
+import { db } from "../firebaseConfig";
 
 export const AuthContext = createContext();
 
@@ -17,10 +17,11 @@ export const AuthContextProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(undefined);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
         setIsAuthenticated(true);
-        setUser(user);
+        setUser(currentUser);
+        updateUserData(currentUser.uid); // Call with the correct `uid`
       } else {
         setIsAuthenticated(false);
         setUser(null);
@@ -28,6 +29,26 @@ export const AuthContextProvider = ({ children }) => {
     });
     return unsub;
   }, []);
+
+  const updateUserData = async (userId) => {
+    try {
+      const docRef = doc(db, "users", userId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // Use setUser safely with the previous user state
+        setUser((prevUser) => ({
+          ...prevUser,
+          username: data.username,
+          profileUrl: data.profileUrl,
+          userId: userId,
+        }));
+      }
+    } catch (e) {
+      console.error("Error updating user data:", e);
+    }
+  };
 
   const login = async (email, password) => {
     try {
@@ -37,27 +58,29 @@ export const AuthContextProvider = ({ children }) => {
       return { success: true };
     } catch (e) {
       let msg = e.message;
-  
+
       if (msg.includes("auth/invalid-email")) {
         msg = "Invalid email address!";
       }
-      if (msg.includes("auth/invalid-credentials")) {
-        msg = "No user found with this credentials";
+      if (msg.includes("auth/user-not-found")) {
+        msg = "No user found with these credentials.";
       }
       if (msg.includes("auth/wrong-password")) {
         msg = "Incorrect password!";
       }
-  
+
       return { success: false, msg };
     }
   };
-  
+
   const logout = async () => {
     try {
       await signOut(auth);
+      setIsAuthenticated(false);
+      setUser(null);
       return { success: true };
-    } catch {
-      return { success: false, msg: e.message, error: e };
+    } catch (e) {
+      return { success: false, msg: e.message };
     }
   };
 
@@ -68,25 +91,26 @@ export const AuthContextProvider = ({ children }) => {
         email,
         password
       );
-      console.log("response.user", response.user);
-
-      // setUser(response.user);
-      // setIsAuthenticated(true);
 
       await setDoc(doc(db, "users", response?.user?.uid), {
         username,
         profileUrl,
         userId: response?.user?.uid,
       });
+
+      setUser(response.user);
+      setIsAuthenticated(true);
+
       return { success: true, data: response?.user };
     } catch (e) {
       let msg = e.message;
+
       if (msg.includes("auth/invalid-email")) {
         msg = "Invalid email address!";
       }
 
       if (msg.includes("auth/email-already-in-use")) {
-        msg = "This email is already in use !";
+        msg = "This email is already in use!";
       }
 
       if (msg.includes("auth/weak-password")) {
